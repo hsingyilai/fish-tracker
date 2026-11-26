@@ -19,6 +19,13 @@ or camera positions is unknown.
 
 Videos from a phone can be copied into `data/videos/` instead.
 
+If the camera fails, `record.py` retries. Footage from before the failure is
+kept, so one clip may be split into several files.
+
+Once its images are saved, a video is moved to `data/videos/extracted/`, so it
+is not processed again. To extract it again, for example with a new interval,
+move it back into `data/videos/`.
+
 ## Label and train
 
 Training needs an NVIDIA GPU. These versions are for Python 3.14 on Windows:
