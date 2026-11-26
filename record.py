@@ -7,6 +7,7 @@ Examples:
 """
 
 import argparse
+import sys
 import time
 from datetime import datetime
 from pathlib import Path
@@ -17,7 +18,10 @@ VIDEO_DIR = Path(__file__).parent / "data" / "videos"
 
 
 def open_camera(index):
-    camera = cv2.VideoCapture(index)
+    # On Windows the default backend (Media Foundation) was unreliable with this
+    # USB camera, so use DirectShow there.
+    backend = cv2.CAP_DSHOW if sys.platform == "win32" else cv2.CAP_ANY
+    camera = cv2.VideoCapture(index, backend)
     if not camera.isOpened():
         raise SystemExit(f"Could not open camera {index}. Try --camera 1.")
     return camera
