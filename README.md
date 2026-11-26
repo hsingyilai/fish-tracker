@@ -2,9 +2,11 @@
 
 Track a pet fish on camera and, later, flag changes from its normal behavior.
 
-**Status:** the pipeline runs from recording to training. The first detector was
-trained on frames from a single one-minute clip, so its accuracy on other days
-or camera positions is unknown.
+**Status:** the pipeline runs from recording to training, and a live view shows
+the detections. The latest detector was trained on frames from eight one-minute
+clips and checked on two others, all recorded on the same day with the camera in
+one position, so its accuracy on other days or setups is untested. Tracking and
+behavior alerts are not built yet.
 
 ## Setup (PowerShell)
 
