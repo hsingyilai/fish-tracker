@@ -6,15 +6,61 @@ Drag with the left mouse button to draw a box, then press:
     b      go back one image
     s      skip without saving
     q      quit (run again to continue where you left off)
+    h      show the cheat sheet again
+A cheat sheet with these keys opens in a second window.
 """
 
 import argparse
 from pathlib import Path
 
 import cv2
+import numpy as np
 
 DATA_DIR = Path(__file__).parent / "data"
 WINDOW = "Label the fish"
+HELP_WINDOW = "Cheat sheet"
+HELP_KEYS = [
+    ("Drag", "draw a box"),
+    ("Space", "save box, next"),
+    ("n", "no fish, next"),
+    ("b", "go back"),
+    ("s", "skip"),
+    ("q", "quit"),
+    ("h", "show this sheet"),
+]
+HELP_RULES = [
+    "Box the whole fish, with tail and fins.",
+    "Partly hidden: box only what you see.",
+    "Seen twice: box the front-glass view.",
+    "Only in the side panel: box that view.",
+    "Split at the corner: one box for both.",
+]
+
+
+def cheat_sheet():
+    """An image listing the keys and the labeling rules."""
+    sheet = np.full((480, 520, 3), 255, np.uint8)
+
+    def write(text, x, y):
+        cv2.putText(sheet, text, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.7,
+                    (0, 0, 0), 1, cv2.LINE_AA)
+
+    y = 36
+    for key, action in HELP_KEYS:
+        write(key, 20, y)
+        write(action, 140, y)
+        y += 36
+    cv2.line(sheet, (20, y - 18), (500, y - 18), (160, 160, 160), 1)
+    y += 18
+    for rule in HELP_RULES:
+        write(rule, 20, y)
+        y += 36
+    return sheet
+
+
+def show_cheat_sheet():
+    cv2.imshow(HELP_WINDOW, cheat_sheet())
+    cv2.moveWindow(HELP_WINDOW, 1300, 0)  # beside the 1280-pixel image
 
 
 def to_yolo(corners, width, height):
@@ -71,7 +117,9 @@ def main():
     )
     box = Box()
     cv2.namedWindow(WINDOW, cv2.WINDOW_AUTOSIZE)
+    cv2.moveWindow(WINDOW, 0, 0)
     cv2.setMouseCallback(WINDOW, box.mouse)
+    show_cheat_sheet()
 
     while index < len(images):
         image = cv2.imread(str(images[index]))
@@ -114,6 +162,8 @@ def main():
             elif key == ord("q"):
                 index = len(images)
                 break
+            elif key == ord("h"):
+                show_cheat_sheet()
 
     cv2.destroyAllWindows()
     done = sum(label_path(p).exists() for p in images)
