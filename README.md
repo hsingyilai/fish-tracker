@@ -44,6 +44,14 @@ footage that was never used in training or validation.
 
 Ultralytics is licensed under AGPL-3.0.
 
+## Watch live
+
+Show the camera with the newest model's box drawn on it (press q to quit):
+
+    .venv\Scripts\python live.py
+
+Nothing is saved. Close `record.py` and other camera apps first.
+
 ## Plan
 
 1. Record clips across several days and lighting conditions.
