@@ -46,6 +46,17 @@ footage that was never used in training or validation.
 
 Ultralytics is licensed under AGPL-3.0.
 
+## Score without training
+
+After recording, extracting and labeling new videos, score the current model on
+them before training on them:
+
+    .venv\Scripts\python evaluate.py
+
+With no arguments it scores videos recorded after the model was trained. You can
+also name videos, for example `evaluate.py 20261127_101500`. Images the model
+got wrong are saved under `data/runs/eval/`.
+
 ## Watch live
 
 Show the camera with the newest model's box drawn on it (press q to quit):
