@@ -35,27 +35,24 @@ Training needs an NVIDIA GPU. These versions are for Python 3.14 on Windows:
     .venv\Scripts\python -m pip install torch==2.14.1 torchvision==0.29.1 --index-url https://download.pytorch.org/whl/cu130
     .venv\Scripts\python -m pip install ultralytics==8.4.220
 
-Then:
+Then label, and train on the videos you name (full names, or how they start):
 
     .venv\Scripts\python label.py
-    .venv\Scripts\python train.py
+    .venv\Scripts\python train.py 20261127_09 20261127_1
 
-Training holds out the newest videos (or, with one video, its last part).
-Those images also pick the best model, so report final accuracy from separate
-footage that was never used in training or validation.
+Every labeled image of those videos is used. Nothing is held out for
+validation, so the scores printed during training say nothing about new footage.
 
 Ultralytics is licensed under AGPL-3.0.
 
-## Score without training
+## Score the model
 
-After recording, extracting and labeling new videos, score the current model on
-them before training on them:
+Name videos the model was not trained on:
 
-    .venv\Scripts\python evaluate.py
+    .venv\Scripts\python evaluate.py 20261126
 
-With no arguments it scores videos recorded after the model was trained. You can
-also name videos, for example `evaluate.py 20261127_101500`. Images the model
-got wrong are saved under `data/runs/eval/`.
+It refuses videos used in training. Add `--save-mistakes` to keep pictures of
+what the model got wrong under `data/runs/eval/`.
 
 ## Watch live
 

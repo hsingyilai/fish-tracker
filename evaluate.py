@@ -1,11 +1,11 @@
-"""Score a trained model on labeled images, without training.
+"""Score a trained model on videos it was not trained on.
 
-    python evaluate.py                   # videos recorded after the model was trained
-    python evaluate.py 20261127_101500   # the videos you name
-    python evaluate.py --model data/runs/fish-4/weights/best.pt 20261127_101500
+    python evaluate.py 20261126          # every video whose name starts like that
+    python evaluate.py 20261126_105333   # one video
+    python evaluate.py 20261126 --model data/runs/fish/weights/best.pt
 
-Extract and label the videos first. Images the model got wrong are saved for
-review, with your label in green and the model's box in red.
+Extract and label the videos first. Add --save-mistakes to keep pictures of what
+the model got wrong, with your label in green and its box in red.
 """
 
 import argparse
@@ -16,18 +16,21 @@ from pathlib import Path
 import cv2
 
 from live import newest_model
-from train import DATA_DIR, RUNS_DIR, label_for, overlap
+from train import RUNS_DIR, TRAINED_ON, label_for, labeled_images
 
 OUTCOMES = ("found", "missed", "off_target", "quiet", "false_box")
 MISTAKES = ("missed", "off_target", "false_box")
 
 
-def recorded_after(video, moment):
-    """True if the video's name is a time later than `moment`."""
-    try:
-        return datetime.strptime(video, "%Y%m%d_%H%M%S") > moment
-    except ValueError:
-        return False  # a renamed or phone video: its time is unknown
+def trained_videos(model_path):
+    """The videos the model learned from, as listed by train.py."""
+    listing = model_path.resolve().parent.parent / TRAINED_ON
+    if not listing.exists():
+        raise SystemExit(
+            f"Cannot tell which videos {model_path} was trained on "
+            f"({TRAINED_ON} is missing). Train a model with train.py."
+        )
+    return set(listing.read_text().splitlines())
 
 
 def read_boxes(label, width, height):
@@ -39,8 +42,17 @@ def read_boxes(label, width, height):
     return boxes
 
 
+def overlap(a, b):
+    """Intersection over union of two (left, top, right, bottom) boxes."""
+    width = max(0, min(a[2], b[2]) - max(a[0], b[0]))
+    height = max(0, min(a[3], b[3]) - max(a[1], b[1]))
+    inter = width * height
+    union = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter
+    return inter / union if union > 0 else 0.0
+
+
 def judge(truths, guesses):
-    """What happened on one image, using the same rule as train.py."""
+    """What happened on one image: a box counts if it overlaps by half or more."""
     if not truths:
         return "false_box" if guesses else "quiet"
     if any(overlap(g, t) >= 0.5 for g in guesses for t in truths):
@@ -69,56 +81,36 @@ def save_mistake(path, image, truths, guesses):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("videos", nargs="*", help="video names, e.g. 20261127_101500")
+    parser.add_argument("videos", nargs="+", help="video names, or how they start")
     parser.add_argument("--model", type=Path, help="default: the newest best.pt")
     parser.add_argument("--conf", type=float, default=0.25, help="confidence cutoff")
     parser.add_argument("--imgsz", type=int, default=960, help="as used in training")
+    parser.add_argument("--save-mistakes", action="store_true")
     args = parser.parse_args()
 
     model_path = args.model or newest_model()
     if not model_path.exists():
         raise SystemExit(f"No model at {model_path}")
-    trained = datetime.fromtimestamp(model_path.stat().st_mtime)
-
-    images = {}
-    for image in sorted((DATA_DIR / "frames").glob("*.jpg")):
-        images.setdefault(image.stem.rsplit("_", 1)[0], []).append(image)
-
-    names = [Path(v).stem for v in args.videos] or [
-        v for v in images if recorded_after(v, trained)
-    ]
-    if not names:
+    videos = labeled_images(args.videos)
+    used = sorted(set(videos) & trained_videos(model_path))
+    if used:
         raise SystemExit(
-            f"No images from videos recorded after this model was trained "
-            f"({trained:%Y-%m-%d %H:%M}). Record, extract and label one, "
-            f"or name a video."
+            f"This model was trained on: {', '.join(used)}. Name only other videos."
         )
-    unknown = [n for n in names if n not in images]
-    if unknown:
-        raise SystemExit(f"No images for: {', '.join(unknown)}")
 
     # Never let Ultralytics install packages on its own.
     os.environ["YOLO_AUTOINSTALL"] = "false"
     from ultralytics import YOLO
 
-    run = model_path.resolve().parent.parent.name
     print(f"Model: {model_path}")
     model = YOLO(str(model_path))
+    run = model_path.resolve().parent.parent.name
     mistake_dir = RUNS_DIR / "eval" / f"{run}_{datetime.now():%Y%m%d_%H%M%S}"
     total = dict.fromkeys(OUTCOMES, 0)
 
-    for name in names:
-        if not recorded_after(name, trained):
-            print(f"Warning: {name} is not newer than the model, which may "
-                  f"have used it. Do not report this as a test score.")
-        labeled = [p for p in images[name] if label_for(p).exists()]
-        if len(labeled) < len(images[name]):
-            print(f"{name}: skipping {len(images[name]) - len(labeled)} unlabeled images")
-        if not labeled:
-            continue
-
+    for name, images in videos.items():
         counts = dict.fromkeys(OUTCOMES, 0)
-        for path in labeled:
+        for path in images:
             image = cv2.imread(str(path))
             height, width = image.shape[:2]
             truths = read_boxes(label_for(path), width, height)
@@ -127,16 +119,14 @@ def main():
             )[0].boxes.xyxy.tolist()
             outcome = judge(truths, guesses)
             counts[outcome] += 1
-            if outcome in MISTAKES:
+            if args.save_mistakes and outcome in MISTAKES:
                 save_mistake(mistake_dir / f"{outcome}_{path.name}",
                              image, truths, guesses)
         report(name, counts)
         for key in OUTCOMES:
             total[key] += counts[key]
 
-    if not sum(total.values()):
-        raise SystemExit("Nothing labeled to score. Run label.py first.")
-    if len(names) > 1:
+    if len(videos) > 1:
         report("All", total)
     if mistake_dir.exists():
         print(f"Mistakes saved in {mistake_dir}")
